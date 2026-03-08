@@ -1,0 +1,5 @@
+{
+  "name": "LinguoQuiz - AI Language Learning",
+  "description": "Generate Duolingo-style language quizzes from your own PDF documents using AI.",
+  "requestFramePermissions": []
+}
