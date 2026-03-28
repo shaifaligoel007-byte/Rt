@@ -24,6 +24,7 @@ import {
   Zap
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { Dashboard } from './components/Dashboard';
 import { 
   generateQuizFromPdfs, 
   generateStoryFromPdfs, 
@@ -92,7 +93,7 @@ const SECTIONS: Section[] = [
 
 export default function App() {
   const [state, setState] = useState<AppState>('home');
-  const [homeTab, setHomeTab] = useState<'path' | 'stories' | 'special'>('path');
+  const [homeTab, setHomeTab] = useState<'path' | 'stories' | 'special' | 'dashboard'>('path');
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   const [activeSection, setActiveSection] = useState<string>('beginner');
   const [mode, setMode] = useState<'quiz' | 'story' | 'special'>('quiz');
@@ -107,11 +108,22 @@ export default function App() {
     streak: number;
     lastActiveDate: string | null;
     specialLessons: Record<string, { level: number, completedCount: number }>;
+    attempts: {
+      id: string;
+      type: 'quiz' | 'story' | 'special';
+      title: string;
+      date: string;
+      score: number;
+      total: number;
+      timeSpent: number; // in seconds
+      topic: string;
+    }[];
   }>(() => {
     const saved = localStorage.getItem('linguo_progress');
     if (saved) {
       const parsed = JSON.parse(saved);
       if (!parsed.specialLessons) parsed.specialLessons = {};
+      if (!parsed.attempts) parsed.attempts = [];
       // Basic streak logic
       const today = new Date().toLocaleDateString();
       if (parsed.lastActiveDate && parsed.lastActiveDate !== today) {
@@ -127,9 +139,11 @@ export default function App() {
       totalXP: 0,
       streak: 0,
       lastActiveDate: null,
-      specialLessons: {}
+      specialLessons: {},
+      attempts: []
     };
   });
+  const [startTime, setStartTime] = useState<number | null>(null);
   const [quizQueue, setQuizQueue] = useState<Quiz[]>([]);
   const [storyQueue, setStoryQueue] = useState<Story[]>([]);
   const [specialLesson, setSpecialLesson] = useState<SpecialLesson | null>(null);
@@ -220,6 +234,7 @@ export default function App() {
             setSpecialLesson(result);
             setActiveSpecialLessonId(lessonId);
             setUploadedPdfs([base64]);
+            setStartTime(Date.now());
             setState('special_lesson');
             return; // Exit early for special lesson
           }
@@ -243,6 +258,7 @@ export default function App() {
         setQuizQueue(generatedQuizzes);
         setQuiz(generatedQuizzes[0]);
         setCurrentQueueIndex(0);
+        setStartTime(Date.now());
         setState('quiz');
       } else if (mode === 'story' && generatedStories.length > 0) {
         const newLibraryItems = generatedStories.map(s => ({
@@ -259,6 +275,7 @@ export default function App() {
         setStory(generatedStories[0]);
         setCurrentQueueIndex(0);
         setVisibleLines(0);
+        setStartTime(Date.now());
         setState('story');
       } else {
         throw new Error(`Failed to generate any ${mode}s.`);
@@ -375,6 +392,8 @@ export default function App() {
 
   const updateProgress = (finalScore: number) => {
     const today = new Date().toLocaleDateString();
+    const endTime = Date.now();
+    const timeSpent = startTime ? Math.round((endTime - startTime) / 1000) : 0;
     
     setUserProgress(prev => {
       const newProgress = { ...prev };
@@ -388,6 +407,38 @@ export default function App() {
         newProgress.streak += 1;
         newProgress.lastActiveDate = today;
       }
+
+      // Log Attempt
+      let title = "Practice";
+      let total = 1;
+      let topic = "General";
+
+      if (state === 'quiz' && quiz) {
+        title = quiz.title;
+        total = quiz.questions.length;
+        topic = selectedUnit?.title || "Custom Quiz";
+      } else if (state === 'story' && story) {
+        title = story.title;
+        total = story.questions.length;
+        topic = "Story Mode";
+      } else if (state === 'special_lesson' && specialLesson) {
+        title = specialLesson.title;
+        total = specialLesson.questions.length;
+        topic = "Special Mastery";
+      }
+
+      const newAttempt = {
+        id: Math.random().toString(36).substr(2, 9),
+        type: state as 'quiz' | 'story' | 'special',
+        title,
+        date: new Date().toISOString(),
+        score: finalScore,
+        total,
+        timeSpent,
+        topic
+      };
+
+      newProgress.attempts = [newAttempt, ...(newProgress.attempts || [])];
 
       // Update Unit Completion
       if (selectedUnit) {
@@ -541,28 +592,34 @@ export default function App() {
               className="space-y-12 pb-24"
             >
               {/* Main Tabs */}
-              <div className="flex border-b border-slate-100">
-                <button
-                  onClick={() => setHomeTab('path')}
-                  className={`flex-1 py-4 font-bold text-lg transition-all border-b-4 ${homeTab === 'path' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-                >
-                  LEARN
-                </button>
-                <button
-                  onClick={() => setHomeTab('stories')}
-                  className={`flex-1 py-4 font-bold text-lg transition-all border-b-4 ${homeTab === 'stories' ? 'border-sky-500 text-sky-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-                >
-                  STORIES
-                </button>
-                <button
-                  onClick={() => setHomeTab('special')}
-                  className={`flex-1 py-4 font-bold text-lg transition-all border-b-4 ${homeTab === 'special' ? 'border-amber-500 text-amber-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-                >
-                  SPECIAL
-                </button>
-              </div>
+                  <div className="flex border-b border-slate-100">
+                    <button
+                      onClick={() => setHomeTab('path')}
+                      className={`flex-1 py-4 font-bold text-lg transition-all border-b-4 ${homeTab === 'path' ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                    >
+                      LEARN
+                    </button>
+                    <button
+                      onClick={() => setHomeTab('stories')}
+                      className={`flex-1 py-4 font-bold text-lg transition-all border-b-4 ${homeTab === 'stories' ? 'border-sky-500 text-sky-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                    >
+                      STORIES
+                    </button>
+                    <button
+                      onClick={() => setHomeTab('special')}
+                      className={`flex-1 py-4 font-bold text-lg transition-all border-b-4 ${homeTab === 'special' ? 'border-amber-500 text-amber-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                    >
+                      SPECIAL
+                    </button>
+                    <button
+                      onClick={() => setHomeTab('dashboard')}
+                      className={`flex-1 py-4 font-bold text-lg transition-all border-b-4 ${homeTab === 'dashboard' ? 'border-purple-500 text-purple-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                    >
+                      DASHBOARD
+                    </button>
+                  </div>
 
-              {homeTab === 'path' ? (
+                  {homeTab === 'path' ? (
                 <div className="space-y-8">
                   {/* Progress Overview Card */}
                   <div className="grid grid-cols-3 gap-4">
@@ -681,6 +738,13 @@ export default function App() {
                       );
                     })}
                   </div>
+                  {homeTab === 'dashboard' && (
+                    <Dashboard 
+                      attempts={userProgress.attempts} 
+                      totalXP={userProgress.totalXP} 
+                      streak={userProgress.streak} 
+                    />
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-6">
@@ -716,6 +780,7 @@ export default function App() {
                           onClick={() => {
                             setStory(s);
                             setVisibleLines(0);
+                            setStartTime(Date.now());
                             setState('story');
                           }}
                           className="p-6 bg-white border-2 border-slate-100 rounded-3xl hover:border-sky-300 hover:shadow-lg transition-all text-left group"
@@ -743,7 +808,8 @@ export default function App() {
                                 totalXP: 0,
                                 streak: 0,
                                 lastActiveDate: null,
-                                specialLessons: {}
+                                specialLessons: {},
+                                attempts: []
                               };
                               setUserProgress(reset);
                               localStorage.setItem('linguo_progress', JSON.stringify(reset));
@@ -774,12 +840,14 @@ export default function App() {
                                 setQuiz(item.data as Quiz);
                                 setQuizQueue([item.data as Quiz]);
                                 setCurrentQueueIndex(0);
+                                setStartTime(Date.now());
                                 setState('quiz');
                               } else if (item.type === 'story') {
                                 setStory(item.data as Story);
                                 setStoryQueue([item.data as Story]);
                                 setCurrentQueueIndex(0);
                                 setVisibleLines(0);
+                                setStartTime(Date.now());
                                 setState('story');
                               } else if (item.type === 'special') {
                                 const progress = userProgress.specialLessons[item.id] || { level: 1, completedCount: 0 };
@@ -791,6 +859,7 @@ export default function App() {
                                     setSpecialLesson(lesson);
                                     setActiveSpecialLessonId(item.id);
                                     setUploadedPdfs(pdfs);
+                                    setStartTime(Date.now());
                                     setState('special_lesson');
                                   } catch (err) {
                                     setError("Failed to regenerate lesson. Please try again.");
@@ -877,6 +946,7 @@ export default function App() {
                                     setSpecialLesson(lesson);
                                     setActiveSpecialLessonId(item.id);
                                     setUploadedPdfs(pdfs);
+                                    setStartTime(Date.now());
                                     setState('special_lesson');
                                   } catch (err) {
                                     setError("Failed to regenerate lesson. Please try again.");
@@ -916,6 +986,13 @@ export default function App() {
                     )}
                   </div>
                 </div>
+              )}
+              {homeTab === 'dashboard' && (
+                <Dashboard 
+                  attempts={userProgress.attempts || []}
+                  totalXP={userProgress.totalXP}
+                  streak={userProgress.streak}
+                />
               )}
             </motion.div>
           )}
@@ -1131,7 +1208,7 @@ export default function App() {
                             `}>
                               {idx + 1}
                             </span>
-                            <span className="font-bold text-slate-400">{String.fromCharCode(65 + idx)}.</span>
+                            <span className="font-bold text-slate-400">{idx + 1}.</span>
                             <span>{option}</span>
                           </div>
                           {isCorrect && <CheckCircle2 className="w-6 h-6 text-emerald-500" />}
@@ -1322,7 +1399,7 @@ export default function App() {
                             `}>
                               {idx + 1}
                             </span>
-                            <span className="font-bold text-slate-400">{String.fromCharCode(65 + idx)}.</span>
+                            <span className="font-bold text-slate-400">{idx + 1}.</span>
                             <span>{option}</span>
                           </div>
                           {isCorrect && <CheckCircle2 className="w-6 h-6 text-emerald-500" />}
@@ -1469,7 +1546,7 @@ export default function App() {
                   >
                     <div className={`max-w-[80%] p-4 rounded-2xl shadow-sm border ${idx % 2 === 0 ? 'bg-white border-slate-100 rounded-bl-none' : 'bg-sky-50 border-sky-100 rounded-br-none'}`}>
                       <div className="flex items-center justify-between gap-4 mb-1">
-                        <p className="text-xs font-bold text-slate-400 uppercase">{line.character}</p>
+                        <p className="text-xs font-bold text-slate-400 uppercase">{idx + 1}. {line.character}</p>
                         <button
                           onClick={() => playPronunciation(line.text)}
                           disabled={isSpeaking !== null}
@@ -1532,7 +1609,7 @@ export default function App() {
                           `}>
                             {idx + 1}
                           </span>
-                          <span className="font-bold text-slate-400">{String.fromCharCode(65 + idx)}.</span>
+                          <span className="font-bold text-slate-400">{idx + 1}.</span>
                           {option}
                         </button>
                       );

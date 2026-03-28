@@ -209,13 +209,15 @@ export async function generateStoryFromPdfs(base64Pdfs: string[]): Promise<Story
   
   const prompt = `
     You are an expert language teacher. 
-    Analyze the provided PDF documents (there may be multiple) and create an interactive Duolingo-style story.
+    Analyze the provided PDF documents. The PDFs contain normal text or prose.
     
-    First, identify or create 2-4 characters for the story based on the content of the PDFs. 
-    Assign each character a role: 'major' (big role) or 'minor' (small role).
-    Provide a brief description for each character.
-
-    The story should be a conversation between these characters.
+    Your task is to TRANSFORM this text into an interactive Duolingo-style story dialogue.
+    
+    1. Create 2-4 distinct characters based on the themes of the PDF.
+    2. Take the information, facts, or narrative from the PDF and DISTRIBUTE them among these characters as a conversation.
+    3. Even if the PDF is just a list of facts or a story in third-person, REWRITE it so the characters are discussing these facts or living the story through dialogue.
+    4. Assign different sentences or pieces of information from the text to different characters to make the conversation feel like a natural, random, and dynamic exchange.
+    
     The story should have 10-15 lines of dialogue.
     Include 3-4 questions interspersed throughout the story.
     Mix these question types: 'multiple_choice', 'fill_in_blank', 'true_false'.
