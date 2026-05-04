@@ -117,13 +117,16 @@ export default function App() {
       total: number;
       timeSpent: number; // in seconds
       topic: string;
+      missedItems?: string[];
     }[];
+    weakVocabulary?: Record<string, number>;
   }>(() => {
     const saved = localStorage.getItem('linguo_progress');
     if (saved) {
       const parsed = JSON.parse(saved);
       if (!parsed.specialLessons) parsed.specialLessons = {};
       if (!parsed.attempts) parsed.attempts = [];
+      if (!parsed.weakVocabulary) parsed.weakVocabulary = {};
       // Basic streak logic
       const today = new Date().toLocaleDateString();
       if (parsed.lastActiveDate && parsed.lastActiveDate !== today) {
@@ -140,10 +143,12 @@ export default function App() {
       streak: 0,
       lastActiveDate: null,
       specialLessons: {},
-      attempts: []
+      attempts: [],
+      weakVocabulary: {}
     };
   });
   const [startTime, setStartTime] = useState<number | null>(null);
+  const [currentSessionMissed, setCurrentSessionMissed] = useState<string[]>([]);
   const [quizQueue, setQuizQueue] = useState<Quiz[]>([]);
   const [storyQueue, setStoryQueue] = useState<Story[]>([]);
   const [specialLesson, setSpecialLesson] = useState<SpecialLesson | null>(null);
@@ -385,6 +390,9 @@ export default function App() {
         origin: { y: 0.6 },
         colors: ['#58cc02', '#ffc800', '#ce82ff']
       });
+    } else {
+      // Track missed item
+      setCurrentSessionMissed(prev => [...prev, currentQuestion.question]);
     }
     
     setIsAnswered(true);
@@ -435,10 +443,17 @@ export default function App() {
         score: finalScore,
         total,
         timeSpent,
-        topic
+        topic,
+        missedItems: currentSessionMissed
       };
 
       newProgress.attempts = [newAttempt, ...(newProgress.attempts || [])];
+
+      // Update Weak Vocabulary
+      if (!newProgress.weakVocabulary) newProgress.weakVocabulary = {};
+      currentSessionMissed.forEach(item => {
+        newProgress.weakVocabulary![item] = (newProgress.weakVocabulary![item] || 0) + 1;
+      });
 
       // Update Unit Completion
       if (selectedUnit) {
@@ -545,6 +560,7 @@ export default function App() {
     setSelectedOption(null);
     setIsAnswered(false);
     setScore(0);
+    setCurrentSessionMissed([]);
   };
 
   const progress = quiz ? ((currentQuestionIndex + 1) / quiz.questions.length) * 100 : 0;
@@ -809,7 +825,8 @@ export default function App() {
                                 streak: 0,
                                 lastActiveDate: null,
                                 specialLessons: {},
-                                attempts: []
+                                attempts: [],
+                                weakVocabulary: {}
                               };
                               setUserProgress(reset);
                               localStorage.setItem('linguo_progress', JSON.stringify(reset));
@@ -992,6 +1009,7 @@ export default function App() {
                   attempts={userProgress.attempts || []}
                   totalXP={userProgress.totalXP}
                   streak={userProgress.streak}
+                  weakVocabulary={userProgress.weakVocabulary}
                 />
               )}
             </motion.div>
@@ -1752,6 +1770,7 @@ export default function App() {
                     setSelectedOption(null);
                     setIsAnswered(false);
                     setScore(0);
+                    setCurrentSessionMissed([]);
                     setState(state === 'special_lesson' ? 'special_lesson' : mode);
                   }}
                   className={`w-full py-4 bg-white border-2 rounded-2xl font-bold text-xl active:scale-95 transition-all ${state === 'special_lesson' ? 'text-amber-500 border-amber-500 hover:bg-amber-50' : 'text-emerald-500 border-emerald-500 hover:bg-emerald-50'}`}

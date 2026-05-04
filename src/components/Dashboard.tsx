@@ -7,7 +7,7 @@ import {
   TrendingUp, Clock, Target, Award, 
   Calendar, CheckCircle2, XCircle, BarChart2,
   ChevronRight, ArrowUpRight, ArrowDownRight,
-  BookOpen, MessageSquare, Zap
+  BookOpen, MessageSquare, Zap, Star
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -20,22 +20,24 @@ interface Attempt {
   total: number;
   timeSpent: number;
   topic: string;
+  missedItems?: string[];
 }
 
 interface DashboardProps {
   attempts: Attempt[];
   totalXP: number;
   streak: number;
+  weakVocabulary?: Record<string, number>;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ attempts, totalXP, streak }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ attempts, totalXP, streak, weakVocabulary = {} }) => {
   const metrics = useMemo(() => {
     if (attempts.length === 0) return null;
 
     const totalQuestions = attempts.reduce((acc, curr) => acc + curr.total, 0);
     const totalCorrect = attempts.reduce((acc, curr) => acc + curr.score, 0);
     const overallAccuracy = (totalCorrect / totalQuestions) * 100;
-    const avgTimePerQuestion = attempts.reduce((acc, curr) => acc + curr.timeSpent, 0) / totalQuestions;
+    const avgTimePerQuestion = attempts.reduce((acc, curr) => acc + curr.timeSpent, 0) / (totalQuestions || 1);
     
     // Performance by topic
     const topicStats: Record<string, { correct: number; total: number }> = {};
@@ -51,9 +53,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ attempts, totalXP, streak 
       total: stats.total
     })).sort((a, b) => b.accuracy - a.accuracy);
 
+    const strugglingTopics = topicData.filter(t => t.accuracy < 60).sort((a, b) => a.accuracy - b.accuracy);
+
+    // Weakest vocabulary (most misses)
+    const topStruggles = Object.entries(weakVocabulary)
+      .sort(([, a], [, b]) => (b as number) - (a as number))
+      .slice(0, 5)
+      .map(([word, count]) => ({ word, count }));
+
     // Accuracy over time (last 10 attempts)
     const timelineData = [...attempts].reverse().slice(-10).map((a, i) => ({
-      name: `Attempt ${attempts.length - 9 + i}`,
+      name: `Attempt ${i + 1}`,
       accuracy: Math.round((a.score / a.total) * 100),
       date: new Date(a.date).toLocaleDateString()
     }));
@@ -63,9 +73,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ attempts, totalXP, streak 
       avgTime: Math.round(avgTimePerQuestion * 10) / 10,
       topicData,
       timelineData,
+      strugglingTopics,
+      topStruggles,
       totalAttempts: attempts.length
     };
-  }, [attempts]);
+  }, [attempts, weakVocabulary]);
 
   if (!metrics) {
     return (
@@ -203,6 +215,72 @@ export const Dashboard: React.FC<DashboardProps> = ({ attempts, totalXP, streak 
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </div>
+      </div>
+
+      {/* Insights Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Struggles / Vocabulary */}
+        <div className="bg-white p-8 rounded-3xl border-2 border-slate-100 shadow-sm space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center">
+              <MessageSquare className="w-5 h-5" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-800">Review Vocabulary</h3>
+          </div>
+          
+          {metrics.topStruggles.length > 0 ? (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-500">You've missed these items most often. Consider focusing on them in your next session.</p>
+              <div className="flex flex-wrap gap-2">
+                {metrics.topStruggles.map((item, i) => (
+                  <div key={i} className="px-4 py-2 bg-slate-50 border-2 border-slate-100 rounded-2xl flex items-center gap-2 group hover:border-red-200 transition-colors">
+                    <span className="font-bold text-slate-700">{item.word}</span>
+                    <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">{item.count} misses</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-100">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+              <p className="text-slate-500 text-sm font-medium">No weak vocabulary points yet. Great work!</p>
+            </div>
+          )}
+        </div>
+
+        {/* Struggles / Topics */}
+        <div className="bg-white p-8 rounded-3xl border-2 border-slate-100 shadow-sm space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center">
+              <Target className="w-5 h-5" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-800">Focus Topics</h3>
+          </div>
+
+          {metrics.strugglingTopics.length > 0 ? (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-500">Units with low accuracy scores. Reviewing these will boost your overall performance.</p>
+              <div className="space-y-3">
+                {metrics.strugglingTopics.slice(0, 3).map((topic, i) => (
+                  <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border-2 border-slate-100">
+                    <div>
+                      <h4 className="font-bold text-slate-700">{topic.name}</h4>
+                      <p className="text-xs text-slate-400 font-medium uppercase mt-0.5">Accuracy: {topic.accuracy}%</p>
+                    </div>
+                    <div className="w-12 h-12 rounded-xl bg-white border-2 border-slate-100 flex items-center justify-center">
+                      <ArrowUpRight className="w-5 h-5 text-slate-400" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-100">
+              <Star className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+              <p className="text-slate-500 text-sm font-medium">All units looking strong! Ready for new challenges.</p>
+            </div>
+          )}
         </div>
       </div>
 
